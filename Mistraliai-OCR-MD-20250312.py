@@ -1,6 +1,7 @@
 """
 Mistral AI PDF OCR 脚本 
-制作时间：2025-03-12_02:22:30 
+制作时间：2025-03-12_19:12:36
+作者：橡木号角
 
 功能：
 1. 使用 Mistral AI 的 OCR 服务将 PDF 文件转换为 Markdown 格式的文本。
@@ -16,6 +17,7 @@ Mistral AI PDF OCR 脚本
 3. 在脚本尾部中设置以下变量：
    - API_KEY: 你的 Mistral AI API 密钥。
    - PDF_PATH: 要处理的 PDF 文件的路径。
+   - “设置默认的最大文件大小”处可以随机应对官方的上传限制，默认填45。   
 4. 在命令行或VScode中运行脚本：
    python mistral_ocr.py
 
@@ -38,11 +40,12 @@ from pathlib import Path
 import os
 import base64
 from mistralai import DocumentURLChunk
-from mistralai.models import OCRResponse
-from PyPDF2 import PdfReader, PdfWriter  # 导入 PyPDF2 库
+from mistralai.models import OCRResponse, SDKError
+from PyPDF2 import PdfReader, PdfWriter
 import shutil
 import datetime
-import re  # 导入正则表达式模块
+import re
+import time
 
 def save_ocr_results(ocr_response: OCRResponse, output_file: str, images_dir: str) -> None:
     """保存 OCR 结果，包括 Markdown 文本和图片。"""
@@ -87,33 +90,43 @@ def process_single_pdf(pdf_path: str, api_key: str, output_file: str, client: Mi
     if not pdf_file.is_file():
         raise FileNotFoundError(f"PDF 文件不存在: {pdf_path}")
 
-    # 上传并处理 PDF
-    uploaded_file = client.files.upload(
-        file={
-            "file_name": pdf_file.name,  # 使用包含 _part_ 的文件名
-            "content": pdf_file.read_bytes(),
-        },
-        purpose="ocr",
-    )
+    retries = 3
+    for attempt in range(retries):
+        try:
+            # 上传并处理 PDF
+            uploaded_file = client.files.upload(
+                file={
+                    "file_name": pdf_file.name,
+                    "content": pdf_file.read_bytes(),
+                },
+                purpose="ocr",
+            )
 
-    signed_url = client.files.get_signed_url(file_id=uploaded_file.id, expiry=1)
-    pdf_response = client.ocr.process(
-        document=DocumentURLChunk(document_url=signed_url.url),
-        model="mistral-ocr-latest",
-        include_image_base64=True  # 获取base64图片
-    )
+            signed_url = client.files.get_signed_url(file_id=uploaded_file.id, expiry=1)
+            pdf_response = client.ocr.process(
+                document=DocumentURLChunk(document_url=signed_url.url),
+                model="mistral-ocr-latest",
+                include_image_base64=True  # 获取base64图片
+            )
 
-    # 保存结果到指定的 Markdown 文件和图片文件夹
-    save_ocr_results(pdf_response, output_file, images_dir)
-    print(f"OCR 处理完成: {pdf_path}")
+            # 保存结果到指定的 Markdown 文件和图片文件夹
+            save_ocr_results(pdf_response, output_file, images_dir)
+            print(f"OCR 处理完成: {pdf_path}")
+            break  # 成功处理，跳出循环
 
+        except SDKError as e:
+            if attempt == retries - 1:  # 最后一次尝试仍然失败
+                raise  # 抛出异常
+            print(f"处理 {pdf_path} 时发生错误: {e}, 正在重试 ({attempt + 1}/{retries})")
+            time.sleep(5)  # 等待一段时间后重试
 
-def get_max_file_size(client: Mistral) -> int:
+def get_max_file_size(client: Mistral, default_max_size_mb: int) -> int:
     """
-    获取Mistral AI允许上传的PDF最大文件大小.
+    获取Mistral AI允许上传的PDF最大文件大小, 如果获取失败则使用用户提供的默认值.
 
     参数:
         client: Mistral AI客户端
+        default_max_size_mb:  用户提供的默认最大文件大小（MB）
 
     返回:
         int: 允许最大文件大小
@@ -125,11 +138,12 @@ def get_max_file_size(client: Mistral) -> int:
         max_size_bytes = (max_size_mb - 1) * 1024 * 1024
         return int(max_size_bytes)  # 转为int类型
     except Exception as e:
-        print(f"获取最大文件大小失败, 使用默认50MB: {e}")
-        return 50 * 1024 * 1024  # 默认50MB
+        print(f"获取最大文件大小失败, 使用用户设置的 {default_max_size_mb}MB: {e}")
+        return default_max_size_mb * 1024 * 1024  # 使用用户设置的默认值
 
-def process_pdf(pdf_path: str, api_key: str) -> None:  # 移除output_file参数
-   # 初始化客户端
+
+def process_pdf(pdf_path: str, api_key: str, max_file_size_mb: int) -> None:
+    # 初始化客户端
     client = Mistral(api_key=api_key)
 
     # 确认PDF文件存在
@@ -137,8 +151,8 @@ def process_pdf(pdf_path: str, api_key: str) -> None:  # 移除output_file参数
     if not pdf_file.is_file():
         raise FileNotFoundError(f"PDF文件不存在: {pdf_path}")
 
-    # 获取最大文件大小限制
-    max_file_size = get_max_file_size(client)
+    # 获取最大文件大小限制, 优先尝试从API获取, 获取不到就用传入的 max_file_size_mb
+    max_file_size = get_max_file_size(client, max_file_size_mb)
 
     # 创建输出目录和图片目录
     script_dir = Path(__file__).resolve().parent
@@ -158,7 +172,9 @@ def process_pdf(pdf_path: str, api_key: str) -> None:  # 移除output_file参数
 
     # 拆分 PDF (如果文件太大且尚未拆分)
     split_dir = script_dir / f"{pdf_file.stem}_split"  # 拆分文件目录
-    if pdf_file.stat().st_size > max_file_size and not list(split_dir.glob(f"{pdf_file.stem}_part_*.pdf")):  # 检查是否需要拆分
+    os.makedirs(split_dir, exist_ok=True)  # 确保拆分目录存在, 不管拆不拆分
+    
+    if pdf_file.stat().st_size > max_file_size and not list(split_dir.glob(f"{pdf_file.stem}_part_*.pdf")):
         print("PDF 文件太大，正在拆分...")
         reader = PdfReader(pdf_file)
         num_pages = len(reader.pages)
@@ -166,8 +182,6 @@ def process_pdf(pdf_path: str, api_key: str) -> None:  # 移除output_file参数
         # 计算拆分策略
         estimated_page_size = pdf_file.stat().st_size / num_pages
         split_size = max(1, int(max_file_size // estimated_page_size))
-
-        os.makedirs(split_dir, exist_ok=True)  # 创建拆分目录
 
         for i in range(0, num_pages, split_size):
             writer = PdfWriter()
@@ -179,8 +193,9 @@ def process_pdf(pdf_path: str, api_key: str) -> None:  # 移除output_file参数
 
             with open(split_file_path, "wb") as output_pdf:
                 writer.write(output_pdf)
+            print(f"拆分文件已保存: {split_file_path}, 大小: {split_file_path.stat().st_size / (1024 * 1024):.2f} MB")
 
-            print(f"拆分文件已保存: {split_file_path}")
+
 
     # 处理 PDF 文件（如果已拆分，则处理拆分后的文件）
     if list(split_dir.glob(f"{pdf_file.stem}_part_*.pdf")):  # 检查是否有拆分文件
@@ -193,9 +208,12 @@ def process_pdf(pdf_path: str, api_key: str) -> None:  # 移除output_file参数
 
     print(f"OCR处理完成, 结果保存在: {output_file}")
 
-if __name__ == "__main__":
-    # 使用示例
-    API_KEY = "你的kye"  # 输入你的API KEY
-    PDF_PATH = r"X:\你的路径\pdf名.pdf"  # 输入你的PDF目录
 
-    process_pdf(PDF_PATH, API_KEY)
+
+if __name__ == "__main__":
+    # 使用示例和可配置参数
+    API_KEY = "API KEY"  # 输入你的API KEY
+    PDF_PATH = r"X:\X\X.pdf"  # 输入你的PDF目录
+    MAX_FILE_SIZE_MB = 45  # 设置默认的最大文件大小 (MB)
+
+    process_pdf(PDF_PATH, API_KEY, MAX_FILE_SIZE_MB)
