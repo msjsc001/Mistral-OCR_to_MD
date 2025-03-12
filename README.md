@@ -2,7 +2,7 @@
 使用Mistral-OCR把扫描版PDF书籍转换为Markdown格式（带图）
 
 # Mistral AI PDF OCR 脚本 
-制作时间：2025-03-12_02:22:30 
+制作时间：2025-03-12_19:15:31
 
 # 功能：
 1. 使用 Mistral AI 的 OCR 服务将 PDF 文件转换为 Markdown 格式的文本。
@@ -18,6 +18,7 @@
 3. 在脚本尾部中设置以下变量：
    - API_KEY: 你的 Mistral AI API 密钥。
    - PDF_PATH: 要处理的 PDF 文件的路径。
+   - “设置默认的最大文件大小”处可以随机应对官方的上传限制，默认填45。   
 4. 在命令行或VScode中运行脚本：
    python mistral_ocr.py
 
