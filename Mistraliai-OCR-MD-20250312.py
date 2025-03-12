@@ -1,7 +1,6 @@
 """
 Mistral AI PDF OCR 脚本 
 制作时间：2025-03-12_19:12:36
-作者：橡木号角
 
 功能：
 1. 使用 Mistral AI 的 OCR 服务将 PDF 文件转换为 Markdown 格式的文本。
