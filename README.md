@@ -22,6 +22,8 @@
 
 **使用方法：**
 
+![image](https://github.com/user-attachments/assets/ce7c6338-3faa-42f0-8ef1-a62ffecc7843)
+
 1. **获取 Mistral AI API 密钥**: 你需要在 [Mistral AI 平台](https://mistral.ai/) (请替换为 Mistral AI 官方平台链接) 获取你的 API 密钥。
 2. **下载并运行程序**:  从 [发布页面](https://github.com/your-github-username/your-repo-name/releases) (请替换为你的仓库发布页面链接) 下载打包好的 EXE 可执行文件，解压后直接运行。
 3. **填写 API 密钥**: 在程序界面中，输入你的 Mistral AI API 密钥。
