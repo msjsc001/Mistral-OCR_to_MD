@@ -1,4 +1,4 @@
-# Mistral-OCR_to_MD
+# Mistral_AI_PDF_OCR
 
 **Mistral AI PDF OCR 工具**
 
