@@ -3,6 +3,7 @@
 **Mistral AI PDF OCR 工具**
 
 [![版本](https://img.shields.io/badge/版本-1.3.9-blue)](https:/github.com/msjsc001/Mistral_AI_PDF_OCR/releases/tag/v1.3.9)  [![许可](https://img.shields.io/badge/许可-MIT-green)](LICENSE)  <!-- 可以根据你的实际仓库信息添加版本和许可徽章 -->
+![image](https://github.com/user-attachments/assets/bf220a26-3c58-4d6f-927f-962ce8db969e)
 
 **简介：**
 
